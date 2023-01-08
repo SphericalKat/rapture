@@ -26,7 +26,7 @@ impl SFU {
         self.publishers.get(&id).context("publisher not found")
     }
 
-    pub async fn create_publisher(&mut self, offer: String) -> anyhow::Result<SocketResponse> {
+    pub async fn create_publisher(&mut self, offer: String, session_id: &String) -> anyhow::Result<SocketResponse> {
         let p = Publisher::new().await?;
         let pub_id = Uuid::new_v4();
 
@@ -40,7 +40,7 @@ impl SFU {
         self.publishers.insert(pub_id.to_string(), p);
 
         Ok(SocketResponse::CreateTransportRes {
-            answer: answer.sdp,
+            answer,
             publisher_id: pub_id.to_string(),
             msg_type: "PUBLISHER_CREATED".to_owned(),
         })
@@ -50,6 +50,7 @@ impl SFU {
         &self,
         offer: String,
         publisher_id: String,
+        session_id: &String
     ) -> anyhow::Result<SocketResponse> {
         let p = self.get_publisher_by_id(publisher_id)?;
 
@@ -59,7 +60,7 @@ impl SFU {
         let ans = p.pc.create_answer(None).await?;
 
         Ok(SocketResponse::NegotiateRes {
-            sdp: ans.sdp,
+            sdp: ans,
             msg_type: "NEGOTIATION_DONE".to_owned(),
         })
     }

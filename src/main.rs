@@ -2,16 +2,16 @@ mod sfu;
 mod signalling;
 
 use axum::{
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    http::StatusCode,
-    response::{IntoResponse, Response},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path,
+    },
+    response::IntoResponse,
     routing::get,
-    Json, Router,
+    Router,
 };
 use once_cell::sync::Lazy;
-use serde_json::json;
 use sfu::SFU;
-use signalling::{SocketMessage, SocketResponse};
 use std::net::SocketAddr;
 use tokio::sync::Mutex;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
     // build our application with some routes
     let app = Router::new()
         // top since it matches all routes
-        .route("/ws", get(ws_handler))
+        .route("/ws/:session_id", get(ws_handler))
         // logging so we can see whats going on
         .layer(TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default()));
 
@@ -45,26 +45,24 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
+async fn ws_handler(Path(session_id): Path<String>, ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_socket(socket, session_id))
 }
 
-async fn handle_socket(mut socket: WebSocket) {
-    loop {
-        if let Some(msg) = socket.recv().await {
-            if let Ok(msg) = msg {
-                match msg {
-                    Message::Text(t) => signalling::handle_text_message(&mut socket, t).await,
-                    Message::Close(_) => {
-                        tracing::debug!("client disconnected");
-                        return;
-                    }
-                    _ => {}
+async fn handle_socket(mut socket: WebSocket, session_id: String) {
+    while let Some(msg) = socket.recv().await {
+        if let Ok(msg) = msg {
+            match msg {
+                Message::Text(t) => signalling::parse_message(&mut socket, t, &session_id).await,
+                Message::Close(_) => {
+                    tracing::debug!("client disconnected");
+                    return;
                 }
-            } else {
-                tracing::debug!("client disconnected");
-                return;
+                _ => {}
             }
+        } else {
+            tracing::debug!("client disconnected");
+            return;
         }
     }
 }
