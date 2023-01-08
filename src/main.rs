@@ -10,6 +10,7 @@ use axum::{
     routing::get,
     Router,
 };
+use futures::StreamExt;
 use once_cell::sync::Lazy;
 use sfu::SFU;
 use std::net::SocketAddr;
@@ -49,11 +50,12 @@ async fn ws_handler(Path(session_id): Path<String>, ws: WebSocketUpgrade) -> imp
     ws.on_upgrade(|socket| handle_socket(socket, session_id))
 }
 
-async fn handle_socket(mut socket: WebSocket, session_id: String) {
-    while let Some(msg) = socket.recv().await {
+async fn handle_socket(socket: WebSocket, session_id: String) {
+    let (mut sender, mut receiver) = socket.split();
+    while let Some(msg) = receiver.next().await {
         if let Ok(msg) = msg {
             match msg {
-                Message::Text(t) => signalling::parse_message(&mut socket, t, &session_id).await,
+                Message::Text(t) => signalling::parse_message(&mut sender, t, &session_id).await,
                 Message::Close(_) => {
                     tracing::debug!("client disconnected");
                     return;

@@ -1,6 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Ok;
+use axum::extract::ws::{WebSocket, Message};
+use futures::{sink::SinkExt, stream::SplitSink};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
@@ -33,6 +35,7 @@ impl SFU {
 
     pub async fn create_publisher(
         &mut self,
+        socket: Arc<Mutex<&mut SplitSink<WebSocket, Message>>>,
         offer: String,
         session_id: &String,
     ) -> anyhow::Result<SocketResponse> {
@@ -48,6 +51,8 @@ impl SFU {
 
         let s = self.get_session(session_id).await?;
 
+        socket.lock().await.send(Message::Text("".to_string()));
+
         s.lock().await.publishers.insert(pub_id.to_string(), p);
 
         Ok(SocketResponse::CreateTransportRes {
@@ -59,6 +64,7 @@ impl SFU {
 
     pub async fn renegotiate(
         &mut self,
+        socket: Arc<Mutex<&mut SplitSink<WebSocket, Message>>>,
         offer: String,
         publisher_id: String,
         session_id: &String,
