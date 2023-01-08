@@ -1,13 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Ok;
-use axum::extract::ws::{WebSocket, Message};
+use axum::extract::ws::{Message, WebSocket};
 use futures::{sink::SinkExt, stream::SplitSink};
+use serde_json::json;
 use tokio::sync::Mutex;
+use tracing::Level;
 use uuid::Uuid;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-use crate::signalling::SocketResponse;
+use crate::signalling::{SocketMessage, SocketResponse};
 
 use self::{publisher::Publisher, session::Session};
 
@@ -51,8 +53,6 @@ impl SFU {
 
         let s = self.get_session(session_id).await?;
 
-        socket.lock().await.send(Message::Text("".to_string()));
-
         s.lock().await.publishers.insert(pub_id.to_string(), p);
 
         Ok(SocketResponse::CreateTransportRes {
@@ -69,6 +69,12 @@ impl SFU {
         publisher_id: String,
         session_id: &String,
     ) -> anyhow::Result<SocketResponse> {
+        tracing::event!(
+            Level::INFO,
+            publisher_id = publisher_id,
+            session_id = session_id,
+            "Renegotiating"
+        );
         let s = self.get_session(session_id).await?;
         let locked_session = s.lock().await;
         let p = locked_session.get_publisher(publisher_id)?;
@@ -78,8 +84,31 @@ impl SFU {
 
         let ans = p.pc.create_answer(None).await?;
 
-        Ok(SocketResponse::NegotiateRes {
+        Ok(SocketResponse::RenegotiateRes {
             sdp: ans,
+            msg_type: "NEGOTIATION_DONE".to_owned(),
+        })
+    }
+
+    async fn renegotiate_server(
+        &mut self,
+        publisher_id: String,
+        session_id: &String,
+    ) -> anyhow::Result<SocketResponse> {
+        tracing::event!(
+            Level::INFO,
+            publisher_id = publisher_id,
+            session_id = session_id,
+            "Renegotiating"
+        );
+        let s = self.get_session(session_id).await?;
+        let locked_session = s.lock().await;
+        let p = locked_session.get_publisher(publisher_id)?;
+
+        let offer = p.pc.create_offer(None).await?;
+
+        Ok(SocketResponse::RenegotiateRes {
+            sdp: offer,
             msg_type: "NEGOTIATION_DONE".to_owned(),
         })
     }

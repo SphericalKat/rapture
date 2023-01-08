@@ -35,7 +35,7 @@ pub enum SocketResponse {
         publisher_id: String,
         msg_type: String,
     },
-    NegotiateRes {
+    RenegotiateRes {
         sdp: RTCSessionDescription,
         msg_type: String,
     },
