@@ -1,19 +1,24 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
+use tokio::sync::Mutex;
+
+use crate::signalling::SendSocket;
 
 use super::{publisher::Publisher, subscriber::Subscriber};
 
-pub struct Session {
+pub struct Session<'session> {
     pub publishers: HashMap<String, Publisher>,
     pub subscribers: HashMap<String, Subscriber>,
+    pub socket: HashMap<String, Arc<Mutex<&'session mut SendSocket>>>
 }
 
-impl Session {
-    pub fn new() -> Session {
+impl<'session> Session<'session> {
+    pub fn new() -> Session<'session> {
         Session {
             publishers: HashMap::new(),
             subscribers: HashMap::new(),
+            socket: HashMap::new(),
         }
     }
 

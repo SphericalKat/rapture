@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::{anyhow};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{sink::SinkExt, stream::SplitSink};
 use serde::{Deserialize, Serialize};
@@ -41,11 +42,9 @@ pub enum SocketResponse {
     },
 }
 
-pub async fn parse_message(
-    socket: &mut SplitSink<WebSocket, Message>,
-    message: String,
-    session_id: &String,
-) {
+pub type SendSocket = SplitSink<WebSocket, Message>;
+
+pub async fn parse_message(socket: &mut SendSocket, message: String, session_id: &String) {
     if let Ok(d) = serde_json::from_str::<SocketMessage>(&message) {
         tracing::debug!("{:?}", d);
         let skt = Arc::new(Mutex::new(socket));
@@ -61,31 +60,26 @@ pub async fn parse_message(
     }
 }
 async fn handle_socket_message(
-    socket: Arc<Mutex<&mut SplitSink<WebSocket, Message>>>,
+    socket: Arc<Mutex<&mut SendSocket>>,
     msg: SocketMessage,
     session_id: &String,
 ) -> anyhow::Result<SocketResponse> {
+    let mut locked_sfu = SFU.lock().await;
     match msg {
         SocketMessage::CreateTransportReq {
             transport_type,
             offer,
         } => match transport_type {
-            Transport::PUBLISHER => {
-                SFU.lock()
-                    .await
-                    .create_publisher(socket, offer, session_id)
-                    .await
-            }
+            Transport::PUBLISHER => locked_sfu.create_publisher(socket, offer, session_id).await,
             Transport::SUBSCRIBER => todo!(),
         },
         SocketMessage::RenegotiateReq {
             offer,
             publisher_id,
         } => {
-            SFU.lock()
-                .await
-                .renegotiate(socket, offer, publisher_id, session_id)
-                .await
+            // locked_sfu.renegotiate(socket, offer, publisher_id, session_id)
+            //     .await
+            Err(anyhow!("asdasda"))
         }
     }
 }
