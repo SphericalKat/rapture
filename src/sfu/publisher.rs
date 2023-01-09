@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Ok;
+use tokio::sync::Mutex;
 use webrtc::{
     api::{
         interceptor_registry::register_default_interceptors, media_engine::MediaEngine, APIBuilder,
@@ -9,13 +10,12 @@ use webrtc::{
     interceptor::registry::Registry,
     peer_connection::{
         configuration::RTCConfiguration,
-        sdp::{sdp_type::RTCSdpType, session_description::RTCSessionDescription},
         RTCPeerConnection,
     },
 };
 
 pub struct Publisher {
-    pub pc: Arc<RTCPeerConnection>,
+    pub pc: Arc<Mutex<RTCPeerConnection>>,
 }
 
 impl Publisher {
@@ -42,7 +42,7 @@ impl Publisher {
             ..Default::default()
         };
 
-        let pc = Arc::new(api.new_peer_connection(config).await?);
+        let pc = Arc::new(Mutex::new(api.new_peer_connection(config).await?));
 
         let p = Publisher { pc };
 
